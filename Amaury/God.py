@@ -10,17 +10,7 @@ import time
 import datetime
 import json
 
-
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
-
-
-def short_angle_dist(a0: float, a1: float):
-    da = (a1 - a0)
-    return (da + np.pi) % (2 * np.pi) - np.pi
+from Amaury.Pandora import short_angle_dist, NumpyEncoder
 
 
 class Bird:
@@ -53,13 +43,13 @@ class Sky:
 
         self.birds = []
 
-    def get_avg_speed(self):
+    def get_avg_speed(self) -> float:
         angles = np.array([bird.angle for bird in self.birds])
         velocities = np.array([bird.vel for bird in self.birds])
         vel_x_mean, vel_y_mean = np.mean(np.cos(angles)* velocities), np.mean(np.sin(angles)* velocities)
         return np.sqrt(np.dot(vel_x_mean, vel_x_mean) ** 2 + np.dot(vel_y_mean, vel_y_mean) ** 2)
 
-    def get_avg_angle(self):
+    def get_avg_angle(self) -> float:
         median_cos = 0
         median_sin = 0
         for bird in self.birds:
@@ -67,7 +57,7 @@ class Sky:
             median_sin += np.sin(bird.angle)
         return np.arctan2(median_sin, median_cos)
 
-    def get_angles_correlations(self, n: int=np.inf):
+    def get_angles_correlations(self, n: int=np.inf) -> tuple:
         pos = np.array([bird.pos for bird in self.birds])
         speedV = np.array([bird.speedV for bird in self.birds])
 
@@ -90,27 +80,27 @@ class Sky:
 
         return np.array(sorted(distances)), np.array([x for _, x in sorted(zip(distances, correlations))])
 
-    def add_bird(self, bird: Bird):
+    def add_bird(self, bird: Bird) -> None:
         self.birds.append(bird)
 
-    def init_grid(self):
+    def init_grid(self) -> None:
         self.grid = np.zeros((self.gridL, self.gridL), dtype=object)
         for i, j in itertools.product(range(self.gridL), range(self.gridL)):
             self.grid[i, j] = []
 
-    def update_grid(self):
+    def update_grid(self) -> None:
         self.init_grid()
         for bird in self.birds:
             gridpos = bird.pos // self.gridstep
             self.grid[int(gridpos[0]), int(gridpos[1])].append(bird)
 
-    def add_n_random_birds(self, n: int, vel: float, ang_vel: float):
+    def add_n_random_birds(self, n: int, vel: float, ang_vel: float) -> None:
         for _ in range(n):
             theta = np.random.rand() * np.pi * 2
             bird = Bird(np.random.rand(2) * self.L, vel, ang_vel, theta)
             self.add_bird(bird)
 
-    def plot(self):
+    def plot(self) -> None:
         pos = np.array([bird.pos for bird in self.birds])
         angles = np.array([bird.angle for bird in self.birds])
         plt.quiver(pos[:, 0], pos[:, 1], np.cos(angles), np.sin(angles))
@@ -123,31 +113,96 @@ class Physics:
         self.interaction_radius = interaction_radius
         self.eta = eta
 
-    def advance(self, dt: float):
+    def get_groups(self) -> tuple:
+        interactions = {}
+        for bird in self.sky.birds:
+            # Collect all bird in interaction range
+            interact_with_close = self.get_interact_with_radius(bird)
+
+            # Check angle difference, and not same one
+            for other_bird in list(interact_with_close):
+                angle_difference = abs(short_angle_dist(bird.angle, other_bird.angle))
+                if angle_difference > self.eta or other_bird == bird:
+                    interact_with_close.remove(other_bird)
+
+            interactions[bird] = interact_with_close
+
+        # find groups
+        bird_to_group = {}
+        groups_to_bird = []
+        curr_group = 0
+
+        def connect(bird, group):
+            if bird in bird_to_group and bird_to_group[bird] == group:
+                return
+            bird_to_group[bird] = group
+            groups_to_bird[group].append(bird)
+
+        for bird in interactions:
+            other_birds = interactions[bird]
+            for other_bird in other_birds:
+                # if another bird has a group
+                if other_bird in bird_to_group:
+                    new_group = bird_to_group[other_bird]
+                    # make current bird in group
+                    connect(bird, new_group)
+                    # look at other connected birds
+                    for other_other_bird in other_birds:
+                        if other_other_bird not in bird_to_group:
+                            # if they're not in a group, connect
+                            connect(other_other_bird, new_group)
+                        else:
+                            # otherwise connect all the members of their group to the new group
+                            other_new_group = bird_to_group[other_other_bird]
+                            if other_new_group != new_group:
+                                for bird_in_group in groups_to_bird[other_new_group]:
+                                    connect(bird_in_group, new_group)
+                                groups_to_bird[other_new_group] = []
+                    break
+
+            if bird not in bird_to_group:
+                groups_to_bird.append([])
+                connect(bird, curr_group)
+                curr_group += 1
+            group = bird_to_group[bird]
+            for other_bird in other_birds:
+                connect(other_bird, group)
+
+        return groups_to_bird, bird_to_group
+
+    def get_interact_with(self, bird: Bird) -> list:
+        interact_with = []
+        gridpos = bird.pos // self.sky.gridstep
+        grid_interaction_radius = self.interaction_radius / self.sky.gridstep
+
+        grid_xmin = int(gridpos[0] - grid_interaction_radius)
+        grid_xmax = int(np.ceil(gridpos[0] + grid_interaction_radius))
+        grid_ymin = int(gridpos[1] - grid_interaction_radius)
+        grid_ymax = int(np.ceil(gridpos[1] + grid_interaction_radius))
+
+        for i, j in itertools.product(range(grid_xmin, grid_xmax + 1), range(grid_ymin, grid_ymax + 1)):
+            interact_with += self.sky.grid[i % self.sky.gridL, j % self.sky.gridL]
+
+        return interact_with
+
+    def get_interact_with_radius(self, bird: Bird) -> list:
+        interact_with = self.get_interact_with(bird)
+
+        interact_with_close = []
+        for other_bird in interact_with:
+            distance = np.linalg.norm(other_bird.pos - bird.pos)
+            if distance <= self.interaction_radius:
+                interact_with_close.append(other_bird)
+
+        return interact_with_close
+
+    def advance(self, dt: float) -> None:
         sky.update_grid()
         for bird in self.sky.birds:
             # Collect all bird in interaction range
-            interact_with = []
-            gridpos = bird.pos // self.sky.gridstep
-            grid_interaction_radius = self.interaction_radius / self.sky.gridstep
-
-            grid_xmin = int(gridpos[0]-grid_interaction_radius)
-            grid_xmax = int(np.ceil(gridpos[0]+grid_interaction_radius))
-            grid_ymin = int(gridpos[1] - grid_interaction_radius)
-            grid_ymax = int(np.ceil(gridpos[1] + grid_interaction_radius))
-
-            for i, j in itertools.product(range(grid_xmin, grid_xmax + 1), range(grid_ymin, grid_ymax + 1)):
-                interact_with += self.sky.grid[i % self.sky.gridL, j % self.sky.gridL]
-
+            interact_with_close = self.get_interact_with_radius(bird)
 
             # Apply interaction
-            # Enforce radius
-            interact_with_close = []
-            for other_bird in interact_with:
-                distance = np.linalg.norm(other_bird.pos - bird.pos)
-                if distance <= self.interaction_radius:
-                    interact_with_close.append(other_bird)
-
             median_cos = 0
             median_sin = 0
             for other_bird in interact_with_close:
@@ -217,20 +272,22 @@ class Life:
         draw_avg_angle = "avg_angle" in to_draw
         draw_correlations = "correlations" in to_draw
         draw_correlations_fit = "correlations_fit" in to_draw
+        draw_groups = "groups" in to_draw
 
         # setup axes
-        gs = GridSpec(2, 2)
+        gs = GridSpec(2, 4)
         fig = plt.figure()
-        ax1 = fig.add_subplot(gs[0, :])
-        ax2 = fig.add_subplot(gs[1, 0])
-        ax3 = fig.add_subplot(gs[1, 1])
-        ax2_2 = ax2.twinx()
-        ax3_2 = ax3.twinx()
+        ax_quiver = fig.add_subplot(gs[0:2, 0:2])
+        ax_speed = fig.add_subplot(gs[0, 2])
+        ax_groups = fig.add_subplot(gs[0, 3])
+        ax_correlation = fig.add_subplot(gs[1, 2])
+        ax_angle = ax_speed.twinx()
+        ax_correlation_length = ax_correlation.twinx()
         fig.set_size_inches(10, 10, True)
 
         # text and time
-        time_text = ax1.text(0.02, 1.05, '', transform=ax1.transAxes)
-        correlations_text = ax3.text(0.02, 1.05, '', transform=ax3.transAxes)
+        time_text = ax_quiver.text(0.02, 1.05, '', transform=ax_quiver.transAxes)
+        correlations_text = ax_correlation.text(0.02, 1.05, '', transform=ax_correlation.transAxes)
         timestamps = np.arange(0, total_time, dt)
         total_frames = len(timestamps)
 
@@ -239,38 +296,47 @@ class Life:
         cm = cmocean.cm.phase
 
         # quiver
-        ax1.set_xlim(0, L)
-        ax1.set_ylim(0, L)
+        ax_quiver.set_xlim(0, L)
+        ax_quiver.set_ylim(0, L)
+
+        # groups
+        ax_speed.set_xlim(0, total_time)
+        ax_speed.set_ylim(0, 1)
+        if draw_groups:
+            avg_speed, = ax_speed.plot([], [], lw=2, label="speed")
+            ax_speed.set_xlabel("time (s)")
+            ax_speed.set_ylabel("avg. speed (m/s)")
+            avg_speeds = []
 
         # avg_speed
-        ax2.set_xlim(0, total_time)
-        ax2.set_ylim(0, 1)
+        ax_speed.set_xlim(0, total_time)
+        ax_speed.set_ylim(0, 1)
         if draw_avg_speed:
-            avg_speed, = ax2.plot([], [], lw=2, label="speed")
-            ax2.set_xlabel("time (s)")
-            ax2.set_ylabel("avg. speed (m/s)")
+            avg_speed, = ax_speed.plot([], [], lw=2, label="speed")
+            ax_speed.set_xlabel("time (s)")
+            ax_speed.set_ylabel("avg. speed (m/s)")
             avg_speeds = []
 
         # avg_angle
-        ax2_2.set_ylim(-np.pi, np.pi)
+        ax_angle.set_ylim(-np.pi, np.pi)
         if draw_avg_angle:
-            avg_angle, = ax2_2.plot([], [], lw=2, color="orange", label="angle")
-            ax2_2.set_ylabel("avg. angle (rad)")
+            avg_angle, = ax_angle.plot([], [], lw=2, color="orange", label="angle")
+            ax_angle.set_ylabel("avg. angle (rad)")
             avg_angles = []
 
         # correlations
-        ax3.set_xlim(0, L)
-        ax3.set_ylim(0, 1)
-        ax3_2.set_ylim(0, L/3)
+        ax_correlation.set_xlim(0, L)
+        ax_correlation.set_ylim(0, 1)
+        ax_correlation_length.set_ylim(0, L/3)
         if draw_correlations:
-            all_corr, = ax3.plot([], [], lw=2)
+            all_corr, = ax_correlation.plot([], [], lw=2)
             if draw_correlations_fit:
-                fitted_corr, = ax3.plot([], [], lw=2)
-                fitted_corr_length, = ax3_2.plot([], [], lw=2, label="correlation length", color="green")
+                fitted_corr, = ax_correlation.plot([], [], lw=2)
+                fitted_corr_length, = ax_correlation_length.plot([], [], lw=2, label="correlation length", color="green")
                 corr_lengths = []
-                ax3_2.set_ylabel("correlation length (m)")
-            ax3.set_xlabel("distance (m)")
-            ax3.set_ylabel("correlation (normed)")
+                ax_correlation_length.set_ylabel("correlation length (m)")
+            ax_correlation.set_xlabel("distance (m)")
+            ax_correlation.set_ylabel("correlation (normed)")
 
         to_unblit = []
 
@@ -290,10 +356,25 @@ class Life:
 
             sky = Sky(L, L)
             for bird in frame:
-                sky.add_bird(Bird(bird[0], bird[2], bird[3], bird[1]))
+                sky.add_bird(Bird(np.array(bird[0]), bird[2], bird[3], bird[1]))
+
+            if draw_groups:
+                sky.gridstep = interaction_radius/2
+                sky.gridL = int(np.ceil(L / gridstep))
+                physics = Physics(sky, interaction_radius, eta)
 
             positions = np.array([bird.pos for bird in sky.birds])
             angles = np.array([bird.angle for bird in sky.birds])
+            quiver_colors = norm(angles)
+
+            if draw_groups:
+                groups, bird_to_group = physics.get_groups()
+                group_colors = np.random.rand(len(groups))
+                quiver_colors = []
+                for bird in sky.birds:
+                    quiver_colors.append(group_colors[bird_to_group[bird]])
+
+                size_groups = [len(group) for group in groups if len(group)>0]
 
             if draw_quiver:
                 x, y = positions[:, 0], positions[:, 1]
@@ -304,7 +385,7 @@ class Life:
                     new_offsets[i][1] = y[i]
                 u = np.cos(angles)
                 v = np.sin(angles)
-                quiver = ax1.quiver(x, y, u, v, norm(angles), cmap=cm, angles='xy', scale_units='xy', scale=1)
+                quiver = ax_quiver.quiver(x, y, u, v, quiver_colors, cmap=cm, angles='xy', scale_units='xy', scale=1)
                 artists.append(quiver)
                 to_unblit.append(quiver)
 
@@ -369,11 +450,11 @@ class Life:
             artists.append(time_text)
 
             if draw_avg_speed:
-                ax2.legend(loc=1)
+                ax_speed.legend(loc=1)
             if draw_avg_angle:
-                ax2_2.legend(loc=2)
+                ax_angle.legend(loc=2)
             if draw_correlations_fit:
-                ax3_2.legend(loc=2)
+                ax_correlation_length.legend(loc=2)
             plt.tight_layout()
 
             return artists
@@ -391,16 +472,16 @@ class Life:
             len(sky.birds), L, eta, sky.birds[0].vel, sky.birds[0].ang_vel, total_time, dt))
 
 
-L = 70
+L = 40
 gridstep = .5
-n_birds = 1000
+n_birds = 800
 vel = 1
 ang_vel = np.pi/2
 interaction_radius = 1
 eta = .5
 
 dt = 1
-total_time = 500
+total_time = 50
 
 sky = Sky(L, gridstep)
 sky.add_n_random_birds(n_birds, vel, ang_vel)
@@ -408,9 +489,8 @@ physics = Physics(sky, interaction_radius, eta)
 life = Life(physics, dt, total_time)
 
 life.simulate(verbose_prop=.1)
-life.animate(verbose_prop=.05, to_draw=["quiver", "avg_speed", "avg_angle", "correlations", "correlations_fit"], options={"fit_spatial_points": 100,
+life.animate(verbose_prop=.05, to_draw=["quiver", "avg_speed", "avg_angle", "correlations", "correlations_fit", "groups"], options={"fit_spatial_points": 100,
                                                                                                                           "correlations_stochastic_points": 5000})
-
 
 
 
