@@ -108,7 +108,7 @@ class Physics:
                 median_cos += np.cos(other_bird.angle)
                 median_sin += np.sin(other_bird.angle)
             median_angle = np.arctan2(median_sin, median_cos)
-            delta_angle = self.eta * (np.random.rand()-.5)
+            delta_angle = self.eta * (np.random.rand()-.5) * dt
             bird.angle = (median_angle + delta_angle) % (2 * np.pi)
 
         # Verlet movement *after* updating directions
@@ -118,14 +118,16 @@ class Physics:
 
         sky.update_grid()
 
-    def get_angles_correlations(self, pos, angles):
-        n_birds = angles.shape[0]
-        projected = np.cos(angles)  # fuck circular variables
+    def get_angles_correlations(self):
+        pos = np.array([bird.pos for bird in self.sky.birds])
+        speedV = np.array([bird.speedV for bird in self.sky.birds])
+
+        n_birds = speedV.shape[0]
 
         correlations = np.full((n_birds, n_birds), 1.)  # upper triangular
         for i in range(n_birds):
             for j in range(i+1, n_birds):
-                correlations[i, j] = projected[i] * projected[j]
+                correlations[i, j] = np.dot(speedV[i], speedV[j])
 
         distances = np.zeros((n_birds, n_birds))  # upper triangular
         for i in range(n_birds):
@@ -202,8 +204,8 @@ class Physics:
             avg_speeds.append(sky.get_avg_speed())
             avg_speed.set_data(timestamps[:num + 1], avg_speeds[:num + 1])
 
-            dists, corrs = physics.get_angles_correlations(pos, angles)
-            regular_dists = np.linspace(0, self.sky.L, 250)
+            dists, corrs = physics.get_angles_correlations()
+            regular_dists = np.linspace(0, self.sky.L, 100)
             regular_corrs = []
 
             for i in range(len(regular_dists) - 1):
@@ -232,20 +234,20 @@ class Physics:
                                        interval=200, blit=True, repeat=True)
         anim.save('lines.mp4', writer=writer)
         elapsed = time.time()-start_t
-        print("Simulation ended at t=%s, elapsed: {%d}h{%d}m{%d}s" % (datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
+        print("Simulation ended at t=%s, elapsed: %dh %dm %ds" % (datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
                                                          elapsed// 3600 % 24, elapsed // 60 % 60, elapsed % 60))
         # plt.show()
 
 
 
-L = 100
+L = 50
 gridstep = .5
 sky = Sky(L, gridstep)
 sky.add_n_random_birds(400, 1)
 
 physics = Physics(sky, 1, .03)
 
-physics.animate(80, 1, verbose_prop=.1)
+physics.animate(50, 1, verbose_prop=.1)
 
 
 
