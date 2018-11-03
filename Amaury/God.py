@@ -102,10 +102,12 @@ class Physics:
                 if distance <= self.interaction_radius:
                     interact_with_close.append(other_bird)
 
-            median_angle = 0
+            median_cos = 0
+            median_sin = 0
             for other_bird in interact_with_close:
-                median_angle += other_bird.angle
-            median_angle = median_angle / len(interact_with_close)
+                median_cos += np.cos(other_bird.angle)
+                median_sin += np.sin(other_bird.angle)
+            median_angle = np.arctan2(median_sin, median_cos)
             delta_angle = self.eta * (np.random.rand()-.5)
             bird.angle = (median_angle + delta_angle) % (2 * np.pi)
 
@@ -239,11 +241,11 @@ class Physics:
 L = 100
 gridstep = .5
 sky = Sky(L, gridstep)
-sky.add_n_random_birds(100, 1)
+sky.add_n_random_birds(400, 1)
 
 physics = Physics(sky, 1, .03)
 
-physics.animate(200, 1, verbose_prop=.1)
+physics.animate(80, 1, verbose_prop=.1)
 
 
 
