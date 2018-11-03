@@ -8,12 +8,26 @@ import cmocean
 import scipy.optimize
 import time
 import datetime
+import json
+
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+
+
+def short_angle_dist(a0: float, a1: float):
+    da = (a1 - a0)
+    return (da + np.pi) % (2 * np.pi) - np.pi
 
 
 class Bird:
-    def __init__(self, pos: np.ndarray, vel: float, angle: float):
+    def __init__(self, pos: np.ndarray, vel: float, ang_vel: float, angle: float):
         self.vel = vel
         self.angle = angle
+        self.ang_vel = ang_vel
         self.pos = pos
         self.lookV = None
         self.speedV = None
@@ -45,6 +59,37 @@ class Sky:
         vel_x_mean, vel_y_mean = np.mean(np.cos(angles)* velocities), np.mean(np.sin(angles)* velocities)
         return np.sqrt(np.dot(vel_x_mean, vel_x_mean) ** 2 + np.dot(vel_y_mean, vel_y_mean) ** 2)
 
+    def get_avg_angle(self):
+        median_cos = 0
+        median_sin = 0
+        for bird in self.birds:
+            median_cos += np.cos(bird.angle)
+            median_sin += np.sin(bird.angle)
+        return np.arctan2(median_sin, median_cos)
+
+    def get_angles_correlations(self, n: int=np.inf):
+        pos = np.array([bird.pos for bird in self.birds])
+        speedV = np.array([bird.speedV for bird in self.birds])
+
+        n_birds = len(self.birds)
+        n = int(min(n, n_birds * (n_birds-1) / 2))
+        indices_i, indices_j = np.triu_indices(n_birds, k=1)
+        chosen_indices = list(range(n))
+        np.random.shuffle(chosen_indices)
+        chosen_indices = chosen_indices[:n]
+        indices_i, indices_j = [indices_i[chosen_indices[i]] for i in range(n)], [indices_j[chosen_indices[i]] for i in range(n)]
+
+        correlations = []
+        distances = []
+
+        for i,j in zip(indices_i, indices_j):
+            correlations.append(np.dot(speedV[i], speedV[j]))
+
+        for i, j in zip(indices_i, indices_j):
+            distances.append(np.linalg.norm(pos[i] - pos[j]))
+
+        return np.array(sorted(distances)), np.array([x for _, x in sorted(zip(distances, correlations))])
+
     def add_bird(self, bird: Bird):
         self.birds.append(bird)
 
@@ -59,10 +104,10 @@ class Sky:
             gridpos = bird.pos // self.gridstep
             self.grid[int(gridpos[0]), int(gridpos[1])].append(bird)
 
-    def add_n_random_birds(self, n: int, vel: float):
+    def add_n_random_birds(self, n: int, vel: float, ang_vel: float):
         for _ in range(n):
             theta = np.random.rand() * np.pi * 2
-            bird = Bird(np.random.rand(2) * self.L, vel, theta)
+            bird = Bird(np.random.rand(2) * self.L, vel, ang_vel, theta)
             self.add_bird(bird)
 
     def plot(self):
@@ -79,6 +124,7 @@ class Physics:
         self.eta = eta
 
     def advance(self, dt: float):
+        sky.update_grid()
         for bird in self.sky.birds:
             # Collect all bird in interaction range
             interact_with = []
@@ -108,145 +154,262 @@ class Physics:
                 median_cos += np.cos(other_bird.angle)
                 median_sin += np.sin(other_bird.angle)
             median_angle = np.arctan2(median_sin, median_cos)
-            delta_angle = self.eta * (np.random.rand()-.5)
-            bird.angle = (median_angle + delta_angle) % (2 * np.pi)
+            diff = short_angle_dist(bird.angle, median_angle)
+            t_move = abs(diff) / bird.ang_vel
+            t_move = min(dt, t_move)
+
+            fluctuation_angle = bird.ang_vel * self.eta * (np.random.rand()-.5) * dt
+            bird.angle = (bird.angle + np.sign(diff) * bird.ang_vel * t_move + fluctuation_angle) % (2 * np.pi)
 
         # Verlet movement *after* updating directions
         for bird in self.sky.birds:
             bird.update_calculated_props()
             bird.pos = (bird.pos + bird.speedV * dt) % L
 
-        sky.update_grid()
 
-    def get_angles_correlations(self, pos, angles):
-        n_birds = angles.shape[0]
-        projected = np.cos(angles)  # fuck circular variables
+class Life:
+    def __init__(self, physics: Physics, dt: float, total_time: float):
+        self.dt = dt
+        self.total_time = total_time
+        self.physics = physics
 
-        correlations = np.full((n_birds, n_birds), 1.)  # upper triangular
-        for i in range(n_birds):
-            for j in range(i+1, n_birds):
-                correlations[i, j] = projected[i] * projected[j]
+        self.writer = animation.writers['ffmpeg'](fps=15, bitrate=-1)  # to save video
 
-        distances = np.zeros((n_birds, n_birds))  # upper triangular
-        for i in range(n_birds):
-            for j in range(i + 1, n_birds):
-                distances[i, j] = np.linalg.norm(pos[i] - pos[j])
+    def simulate(self, verbose_prop: float=.01, output_file: str="data.json"):
+        timestamps = np.arange(0, self.total_time, self.dt)
+        total_frames = len(timestamps)
+        frames = []
 
-        distances_flat = distances[np.triu_indices(n_birds, k=1)]
-        correlations_flat = correlations[np.triu_indices(n_birds, k=1)]
+        start_t = time.time()
+        print("Simulation start at t=%s" % datetime.datetime.fromtimestamp(start_t).strftime('%Y-%m-%d %H:%M:%S'))
+        frame_n = 0
+        for _ in timestamps:
+            frame_n += 1
+            if frame_n % (1+int(total_frames*verbose_prop)) == 0:
+                print("Simulating frame %d/%d" % (frame_n, total_frames))
 
-        return np.array(sorted(distances_flat)), np.array([x for _, x in sorted(zip(distances_flat, correlations_flat))])
+            self.physics.advance(self.dt)
 
-    def animate(self, total_time: float, dt: float, verbose_prop: float=.01):
-        Writer = animation.writers['ffmpeg']  # to save video
-        writer = Writer(fps=15, bitrate=-1)  # to save video
+            frames.append([[bird.pos, bird.angle, bird.vel, bird.ang_vel] for bird in self.physics.sky.birds])
 
+        elapsed = time.time() - start_t
+        print("Simulation ended at t=%s, elapsed: %dh %dm %ds. N=%d, L=%d, eta=%.2f, v=%.1f, omega=%.1f, T=%d, dt=%.1f" % (
+            datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
+            elapsed // 3600 % 24, elapsed // 60 % 60, elapsed % 60,
+            len(self.physics.sky.birds), self.physics.sky.L, self.physics.eta, self.physics.sky.birds[0].vel, self.physics.sky.birds[0].ang_vel, self.total_time,
+            self.dt))
+
+        data_to_save = {"frames": frames, "parameters": [self.dt, self.total_time, self.physics.sky.L, self.physics.eta, self.physics.interaction_radius]}
+        with open(output_file, "w") as f:
+            json.dump(data_to_save, f, cls=NumpyEncoder)
+
+    def animate(self, verbose_prop: float=.01, to_draw: list=[], input_file: str="data.json", output_file: str="lines.mp4", options: dict={}):
+        # load data
+        with open(input_file, "r") as f:
+            data = json.load(f)
+        frames = data["frames"]
+        dt, total_time, L, eta, interaction_radius = data["parameters"]
+        print("Got %d frames" % len(frames))
+
+        # chose what to draw
+        draw_quiver = "quiver" in to_draw
+        draw_avg_speed = "avg_speed" in to_draw
+        draw_avg_angle = "avg_angle" in to_draw
+        draw_correlations = "correlations" in to_draw
+        draw_correlations_fit = "correlations_fit" in to_draw
+
+        # setup axes
         gs = GridSpec(2, 2)
         fig = plt.figure()
         ax1 = fig.add_subplot(gs[0, :])
         ax2 = fig.add_subplot(gs[1, 0])
         ax3 = fig.add_subplot(gs[1, 1])
+        ax2_2 = ax2.twinx()
+        ax3_2 = ax3.twinx()
         fig.set_size_inches(10, 10, True)
 
-        time_text = ax1.text(0.02, 0.95, '', transform=ax1.transAxes)
+        # text and time
+        time_text = ax1.text(0.02, 1.05, '', transform=ax1.transAxes)
+        correlations_text = ax3.text(0.02, 1.05, '', transform=ax3.transAxes)
         timestamps = np.arange(0, total_time, dt)
+        total_frames = len(timestamps)
 
+        # colors
         norm = matplotlib.colors.Normalize(vmin=0, vmax=2 * np.pi)
         cm = cmocean.cm.phase
 
-        pos = np.array([bird.pos for bird in self.sky.birds])
-        angles = np.array([bird.angle for bird in self.sky.birds])
-        Q = ax1.quiver(pos[:, 0], pos[:, 1], np.cos(angles), np.sin(angles), cmap=cm, angles='xy', scale_units='xy', scale=1)
-        ax1.set_xlim(0, self.sky.L)
-        ax1.set_ylim(0, self.sky.L)
+        # quiver
+        ax1.set_xlim(0, L)
+        ax1.set_ylim(0, L)
 
-        avg_speed, = ax2.plot([], [], lw=2)
+        # avg_speed
         ax2.set_xlim(0, total_time)
         ax2.set_ylim(0, 1)
-        ax2.set_xlabel("time (s)")
-        ax2.set_ylabel("avg. speed (m/s)")
+        if draw_avg_speed:
+            avg_speed, = ax2.plot([], [], lw=2, label="speed")
+            ax2.set_xlabel("time (s)")
+            ax2.set_ylabel("avg. speed (m/s)")
+            avg_speeds = []
 
-        all_corr, = ax3.plot([], [], lw=2)
-        fitted_corr, = ax3.plot([], [], lw=2)
-        ax3.set_xlim(0, self.sky.L)
+        # avg_angle
+        ax2_2.set_ylim(-np.pi, np.pi)
+        if draw_avg_angle:
+            avg_angle, = ax2_2.plot([], [], lw=2, color="orange", label="angle")
+            ax2_2.set_ylabel("avg. angle (rad)")
+            avg_angles = []
+
+        # correlations
+        ax3.set_xlim(0, L)
         ax3.set_ylim(0, 1)
-        ax3.set_xlabel("distance (m)")
-        ax3.set_ylabel("correlation (normed)")
+        ax3_2.set_ylim(0, L/3)
+        if draw_correlations:
+            all_corr, = ax3.plot([], [], lw=2)
+            if draw_correlations_fit:
+                fitted_corr, = ax3.plot([], [], lw=2)
+                fitted_corr_length, = ax3_2.plot([], [], lw=2, label="correlation length", color="green")
+                corr_lengths = []
+                ax3_2.set_ylabel("correlation length (m)")
+            ax3.set_xlabel("distance (m)")
+            ax3.set_ylabel("correlation (normed)")
 
-        avg_speeds = []
+        to_unblit = []
 
-        total_frames = int(total_time / dt)
-        def update_quiver(num, Q, time_text, avg_speed, all_corr, fitted_corr):
-            """updates the horizontal and vertical vector components by a
-            fixed increment on each frame
-            """
+        def update_animation(num):
+            artists = []
             if num % (1+int(total_frames*verbose_prop)) == 0:
-                print("Doing frame %d/%d" % (num, total_frames))
+                print("Drawing frame %d/%d" % (num, total_frames))
 
-            self.advance(dt)
+            # unblit artists created on the spot
+            for artist in list(to_unblit):
+                to_unblit.remove(artist)
+                artist.remove()
+                del artist
 
-            pos = np.array([bird.pos for bird in self.sky.birds])
-            angles = np.array([bird.angle for bird in self.sky.birds])
+            frame = np.array(frames[num])
+            passed_time = timestamps[:num + 1]
 
-            X, Y = pos[:, 0], pos[:, 1]
-            N = len(self.sky.birds)
-            new_offsets = np.zeros((N, 2))
-            for i in range(N):
-                new_offsets[i][0] = X[i]
-                new_offsets[i][1] = Y[i]
-            U = np.cos(angles)
-            V = np.sin(angles)
-            Q.set_offsets(new_offsets)
-            Q.set_UVC(U*self.interaction_radius, V*self.interaction_radius, norm(angles))
+            sky = Sky(L, L)
+            for bird in frame:
+                sky.add_bird(Bird(bird[0], bird[2], bird[3], bird[1]))
 
-            avg_speeds.append(sky.get_avg_speed())
-            avg_speed.set_data(timestamps[:num + 1], avg_speeds[:num + 1])
+            positions = np.array([bird.pos for bird in sky.birds])
+            angles = np.array([bird.angle for bird in sky.birds])
 
-            dists, corrs = physics.get_angles_correlations(pos, angles)
-            regular_dists = np.linspace(0, self.sky.L, 250)
-            regular_corrs = []
+            if draw_quiver:
+                x, y = positions[:, 0], positions[:, 1]
+                n = len(frame)
+                new_offsets = np.zeros((n, 2))
+                for i in range(n):
+                    new_offsets[i][0] = x[i]
+                    new_offsets[i][1] = y[i]
+                u = np.cos(angles)
+                v = np.sin(angles)
+                quiver = ax1.quiver(x, y, u, v, norm(angles), cmap=cm, angles='xy', scale_units='xy', scale=1)
+                artists.append(quiver)
+                to_unblit.append(quiver)
 
-            for i in range(len(regular_dists) - 1):
-                mask = np.logical_and(dists > regular_dists[i], dists < regular_dists[i + 1])
-                mean = np.mean(corrs[mask])
-                regular_corrs.append(mean)
-            regular_dists = regular_dists[:-1]
-            all_corr.set_data(regular_dists, regular_corrs)
+            if draw_avg_speed:
+                avg_speeds.append(sky.get_avg_speed())
+                avg_speed.set_data(passed_time, avg_speeds[:num + 1])
+                artists.append(avg_speed)
 
-            def func_fit(x, a, zeta):
-                return a * np.exp(- x / zeta)
-            try:
-                popt, _ = scipy.optimize.curve_fit(func_fit, dists, corrs)
-                fitted_corr.set_data(dists, func_fit(dists, *popt))
-            except Exception:
-                pass
+            if draw_correlations:
+                correlations_stochastic_points = options.get("correlations_stochastic_points", 2000)
+                dists, corrs = sky.get_angles_correlations(n=correlations_stochastic_points)
+                space_points = options.get("fit_spatial_points", 100)
+                regular_dists = np.linspace(0, L, space_points)
+                regular_corrs = []
 
-            time_text.set_text('time = %.1f s' % round(dt * num, 3))
+                for i in range(len(regular_dists) - 1):
+                    mask = np.logical_and(dists > regular_dists[i], dists < regular_dists[i + 1])
+                    if len(corrs[mask]) == 0:
+                        mean = 0
+                    else:
+                        mean = np.mean(corrs[mask])
+                    regular_corrs.append(mean)
+                regular_corrs = np.array(regular_corrs)
+                regular_dists = np.array(regular_dists[:-1])
+                all_corr.set_data(regular_dists, regular_corrs)
+                artists.append(all_corr)
 
-            return Q, time_text, avg_speed, all_corr, fitted_corr,
+                correlations_text_value = "n_points: %d, stochastic correlation on %d points" % (space_points, correlations_stochastic_points)
+                if draw_correlations_fit:
+                    def func_fit(x, a, zeta):
+                        return a * np.exp(- x / zeta)
+
+                    try:
+                        popt, _ = scipy.optimize.curve_fit(func_fit, regular_dists, regular_corrs)
+                        corr_lengths.append(popt[1])
+                        fitted_corr.set_data(regular_dists, func_fit(regular_dists, *popt))
+                        artists.append(fitted_corr)
+                        fitted_corr_length.set_data(passed_time*L/total_time, corr_lengths[:num + 1])
+                        artists.append(fitted_corr_length)
+
+                        residuals = regular_corrs - func_fit(regular_dists, *popt)
+                        ss_res = np.sum(residuals ** 2)
+                        ss_tot = np.sum((regular_corrs - np.mean(regular_corrs)) ** 2)
+                        r_squared = 1 - (ss_res / ss_tot)
+                        correlations_text_value += "\n$R^2$ = %.5f" % r_squared
+                    except Exception as e:
+                        corr_lengths.append(0)
+                        print("Exception in fit: %s" % e)
+
+                correlations_text.set_text(correlations_text_value)
+                artists.append(correlations_text)
+
+            if draw_avg_angle:
+                avg_angles.append(sky.get_avg_angle())
+                avg_angle.set_data(passed_time, avg_angles[:num + 1])
+                artists.append(avg_angle)
+
+            time_text.set_text('time = %.1f s - params: N=%d, L=%d, eta=%.2f, v=%.1f, omega=%.1f, T=%d, dt=%.1f' %
+                               (round(dt * num, 3),
+                                len(sky.birds), L, eta, sky.birds[0].vel,
+                                sky.birds[0].ang_vel, total_time, dt))
+            artists.append(time_text)
+
+            if draw_avg_speed:
+                ax2.legend(loc=1)
+            if draw_avg_angle:
+                ax2_2.legend(loc=2)
+            if draw_correlations_fit:
+                ax3_2.legend(loc=2)
+            plt.tight_layout()
+
+            return artists
 
         start_t = time.time()
-        print("Simulation start at t=%s" % datetime.datetime.fromtimestamp(start_t).strftime('%Y-%m-%d %H:%M:%S'))
+        print("Drawing start at t=%s" % datetime.datetime.fromtimestamp(start_t).strftime('%Y-%m-%d %H:%M:%S'))
 
-        anim = animation.FuncAnimation(fig, update_quiver, frames=total_frames, fargs=(Q, time_text, avg_speed, all_corr, fitted_corr),
-                                       interval=200, blit=True, repeat=True)
-        anim.save('lines.mp4', writer=writer)
-        elapsed = time.time()-start_t
-        print("Simulation ended at t=%s, elapsed: {%d}h{%d}m{%d}s" % (datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
-                                                         elapsed// 3600 % 24, elapsed // 60 % 60, elapsed % 60))
-        # plt.show()
+        anim = animation.FuncAnimation(fig, update_animation, frames=total_frames, interval=200, blit=True, repeat=True)
+        anim.save(output_file, writer=self.writer)
+        elapsed = time.time() - start_t
+        print(
+            "Drawing ended at t=%s, elapsed: %dh %dm %ds. N=%d, L=%d, eta=%.2f, v=%.1f, omega=%.1f, T=%d, dt=%.1f" % (
+            datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
+            elapsed // 3600 % 24, elapsed // 60 % 60, elapsed % 60,
+            len(sky.birds), L, eta, sky.birds[0].vel, sky.birds[0].ang_vel, total_time, dt))
 
 
-
-L = 100
+L = 70
 gridstep = .5
+n_birds = 1000
+vel = 1
+ang_vel = np.pi/2
+interaction_radius = 1
+eta = .5
+
+dt = 1
+total_time = 500
+
 sky = Sky(L, gridstep)
-sky.add_n_random_birds(400, 1)
+sky.add_n_random_birds(n_birds, vel, ang_vel)
+physics = Physics(sky, interaction_radius, eta)
+life = Life(physics, dt, total_time)
 
-physics = Physics(sky, 1, .03)
-
-physics.animate(80, 1, verbose_prop=.1)
-
+life.simulate(verbose_prop=.1)
+life.animate(verbose_prop=.05, to_draw=["quiver", "avg_speed", "avg_angle", "correlations", "correlations_fit"], options={"fit_spatial_points": 100,
+                                                                                                                          "correlations_stochastic_points": 5000})
 
 
 
