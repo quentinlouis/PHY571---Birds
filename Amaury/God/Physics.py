@@ -2,9 +2,9 @@ import numpy as np
 import itertools
 from typing import Tuple, List
 
-from Amaury.God.Pandora import short_angle_dist
-from Amaury.God.Bird import Bird
-from Amaury.God.Sky import Sky
+from God.Pandora import short_angle_dist
+from God.Bird import Bird
+from God.Sky import Sky
 
 
 class Physics:

@@ -4,8 +4,8 @@ import time
 
 import numpy as np
 
-import Amaury.God.SaveAndLoad as SaveAndLoad
-from Amaury.God.Physics import Physics
+import God.SaveAndLoad as SaveAndLoad
+from God.Physics import Physics
 
 log = logging.getLogger('Life')
 log.addHandler(logging.StreamHandler())
@@ -25,11 +25,16 @@ def simulate(physics: Physics, dt: float, total_time: float, verbose_prop: float
         (datetime.datetime.fromtimestamp(start_t).strftime('%Y-%m-%d %H:%M:%S'),
          total_time, dt, physics.sky.L, len(physics.sky.birds), physics.sky.birds[0].vel, physics.sky.birds[0].ang_vel,
          physics.interaction_radius, physics.eta))
-    frame_n = 0
+    frame_number = 0
     for _ in timestamps:
-        frame_n += 1
-        if frame_n % (1 + int(total_frames * verbose_prop)) == 0:
-            log.info("Simulating frame %d/%d" % (frame_n, total_frames))
+        frame_number += 1
+        if frame_number % (1 + int(total_frames * verbose_prop)) == 0:
+            time_per_frame = (time.time() - start_t) / frame_number
+            remaining_time = time_per_frame * (total_frames - frame_number)
+            log.info("Simulating frame %d/%d - remaining est. %dh %dm %ds" % (frame_number, total_frames,
+                                                                              remaining_time // 3600 % 24,
+                                                                              remaining_time // 60 % 60,
+                                                                              remaining_time % 60,))
 
         if evolve is not None:
             evolve(physics.sky)

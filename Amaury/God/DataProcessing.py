@@ -6,9 +6,9 @@ from typing import List, Dict
 import numpy as np
 import scipy.optimize
 
-import Amaury.God.SaveAndLoad as SaveAndLoad
-from Amaury.God.Physics import Physics
-from Amaury.God.Sky import Sky
+import God.SaveAndLoad as SaveAndLoad
+from God.Physics import Physics
+from God.Sky import Sky
 
 log = logging.getLogger('DataProcessing')
 log.addHandler(logging.StreamHandler())
@@ -102,7 +102,12 @@ class Processor:
         for frame in self.frames:
             frame_number += 1
             if frame_number % (1 + int(total_frames * verbose_prop)) == 0:
-                log.info("Processing frame %d/%d" % (frame_number, total_frames))
+                time_per_frame = (time.time() - start_t) / (frame_number + 1)
+                remaining_time = time_per_frame * (total_frames - frame_number)
+                log.info("Processing frame %d/%d - remaining est. %dh %dm %ds" % (frame_number, total_frames,
+                                                                                  remaining_time // 3600 % 24,
+                                                                                  remaining_time // 60 % 60,
+                                                                                  remaining_time % 60,))
 
             self.process_frame(frame, frame_number)
 

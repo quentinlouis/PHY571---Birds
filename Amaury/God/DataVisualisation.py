@@ -10,7 +10,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
-import Amaury.God.SaveAndLoad as SaveAndLoad
+import God.SaveAndLoad as SaveAndLoad
 
 log = logging.getLogger('DataVisualisation')
 log.addHandler(logging.StreamHandler())
@@ -296,7 +296,7 @@ class Visualiser:
         zetas = []
         for data in self.processed_data["correlations_fit"][:frame_num + 1]:
             if data is not None:
-                zetas.append(data[2])
+                zetas.append(data[1])
             else:
                 zetas.append(zetas[-1] if len(zetas) > 0 else 0)
         self.layout_artists["correlation_length"].set_data(times * L / self.timestamps[-1], zetas)
@@ -364,10 +364,16 @@ class Visualiser:
         if animation_mode:
             self.draw_animation()
 
-    def update_animation(self, num) -> list:
+    def update_animation(self, frame_number: int, start_t: float) -> list:
         total_frames = len(self.timestamps)
-        if num % (1 + int(total_frames * self.verbose_prop)) == 0:
-            log.info("Drawing frame (%d)+%d/%d" % (self.start_frame, num, total_frames))
+        if frame_number % (1 + int(total_frames * self.verbose_prop)) == 0:
+            time_per_frame = (time.time() - start_t) / (frame_number + 1)
+            remaining_time = time_per_frame * (total_frames - frame_number)
+            log.info("Processing frame %d/%d - remaining est. %dh %dm %ds" % (frame_number, total_frames,
+                                                                              remaining_time // 3600 % 24,
+                                                                              remaining_time // 60 % 60,
+                                                                              remaining_time % 60,))
+            log.info("Drawing frame (%d)+%d/%d" % (self.start_frame, frame_number, total_frames))
 
         # unblit artists created on the spot
         for artist in list(self.to_unblit):
@@ -376,34 +382,34 @@ class Visualiser:
             del artist
 
         if self.to_draw["avg_speed"]:
-            self.plot_avg_speed(num)
+            self.plot_avg_speed(frame_number)
 
         if self.to_draw["avg_angle"]:
-            self.plot_avg_angle(num)
+            self.plot_avg_angle(frame_number)
 
         if self.to_draw["avg_polar"]:
-            self.plot_avg_polar(num)
+            self.plot_avg_polar(frame_number)
 
         if self.to_draw["correlations"]:
-            self.plot_correlations(num)
+            self.plot_correlations(frame_number)
 
         if self.to_draw["correlations_fit"]:
-            self.plot_correlations_fit(num)
+            self.plot_correlations_fit(frame_number)
 
         if self.to_draw["correlation_length"]:
-            self.plot_correlations_length(num)
+            self.plot_correlations_length(frame_number)
 
         if self.to_draw["group_size"]:
-            self.plot_group_size(num)
+            self.plot_group_size(frame_number)
 
         if self.to_draw["group_size_avg"]:
-            self.plot_group_size_avg(num)
+            self.plot_group_size_avg(frame_number)
 
         if self.to_draw["group_size_avg_fit"]:
-            self.plot_group_size_avg_fit(num)
+            self.plot_group_size_avg_fit(frame_number)
 
         if self.to_draw["quiver"]:
-            self.plot_quiver(num)
+            self.plot_quiver(frame_number)
 
         plt.tight_layout()
         return list(self.layout_artists.values())
@@ -420,7 +426,7 @@ class Visualiser:
         log.info("Drawing start at t=%s" % datetime.datetime.fromtimestamp(start_t).strftime('%Y-%m-%d %H:%M:%S'))
 
         anim = animation.FuncAnimation(self.fig, self.update_animation, init_func=lambda: (), frames=total_frames,
-                                       interval=200, blit=True, repeat=True)
+                                       interval=200, blit=True, repeat=True, fargs=(start_t, ))
         SaveAndLoad.make_path_available(self.output_file)
         anim.save(self.output_file, writer=self.writer)
         elapsed = time.time() - start_t

@@ -5,9 +5,9 @@ from typing import List, Union
 
 import numpy as np
 
-from Amaury.God.Bird import Bird
-from Amaury.God.Pandora import NumpyEncoder
-from Amaury.God.Sky import Sky
+from God.Bird import Bird
+from God.Pandora import NumpyEncoder
+from God.Sky import Sky
 
 
 def make_path_available(path: str) -> None:

@@ -2,7 +2,7 @@ import numpy as np
 import itertools
 from typing import List
 
-from Amaury.God.Bird import Bird
+from God.Bird import Bird
 
 
 class Sky:
