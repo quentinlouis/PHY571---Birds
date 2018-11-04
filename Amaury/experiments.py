@@ -19,10 +19,10 @@ def launch_simulation(output_file: str, L: float, n_birds: int, vel: float = 1, 
 
 
 def evolve(sky: Sky):
-    sky.add_n_random_birds(3, 1, np.pi/2)
+    pass  # sky.add_n_random_birds(3, 1, np.pi/2)
 
 
-launch_simulation("simulation_data/test.json", L=40, n_birds=1, total_time=5, evolve=evolve)
+launch_simulation("simulation_data/test.json", L=40, n_birds=400, total_time=100, evolve=evolve)
 
 to_process = ["avg_speed", "avg_angle", "group_size", "group_size_avg", "group_size_avg_fit", "groups", "correlations",
               "correlations_fit"]

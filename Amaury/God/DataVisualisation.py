@@ -369,11 +369,10 @@ class Visualiser:
         if frame_number % (1 + int(total_frames * self.verbose_prop)) == 0:
             time_per_frame = (time.time() - start_t) / (frame_number + 1)
             remaining_time = time_per_frame * (total_frames - frame_number)
-            log.info("Processing frame %d/%d - remaining est. %dh %dm %ds" % (frame_number, total_frames,
+            log.info("Drawing frame %d/%d - remaining est. %dh %dm %ds" % (frame_number, total_frames,
                                                                               remaining_time // 3600 % 24,
                                                                               remaining_time // 60 % 60,
                                                                               remaining_time % 60,))
-            log.info("Drawing frame (%d)+%d/%d" % (self.start_frame, frame_number, total_frames))
 
         # unblit artists created on the spot
         for artist in list(self.to_unblit):
