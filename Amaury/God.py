@@ -201,7 +201,7 @@ class Physics:
         return interact_with_close
 
     def advance(self, dt: float) -> None:
-        sky.update_grid()
+        self.sky.update_grid()
         for bird in self.sky.birds:
             # Collect all bird in interaction range
             interact_with_close = self.get_interact_with_radius(bird)
@@ -223,19 +223,15 @@ class Physics:
         # Verlet movement *after* updating directions
         for bird in self.sky.birds:
             bird.update_calculated_props()
-            bird.pos = (bird.pos + bird.speedV * dt) % L
+            bird.pos = (bird.pos + bird.speedV * dt) % self.sky.L
 
 
 class Life:
-    def __init__(self, physics: Physics, dt: float, total_time: float):
-        self.dt = dt
-        self.total_time = total_time
-        self.physics = physics
-
+    def __init__(self):
         self.writer = animation.writers['ffmpeg'](fps=15, bitrate=-1)  # to save video
 
-    def simulate(self, verbose_prop: float=.01, output_file: str="data.json"):
-        timestamps = np.arange(0, self.total_time, self.dt)
+    def simulate(self, physics: Physics, dt: float, total_time: float, verbose_prop: float=.01, output_file: str="data.json", evolve=lambda sky: None):
+        timestamps = np.arange(0, total_time, dt)
         total_frames = len(timestamps)
         frames = []
 
@@ -247,18 +243,21 @@ class Life:
             if frame_n % (1+int(total_frames*verbose_prop)) == 0:
                 print("Simulating frame %d/%d" % (frame_n, total_frames))
 
-            self.physics.advance(self.dt)
+            if evolve is not None:
+                evolve(physics.sky)
 
-            frames.append([[bird.pos, bird.angle, bird.vel, bird.ang_vel] for bird in self.physics.sky.birds])
+            physics.advance(dt)
+
+            frames.append([[bird.pos, bird.angle, bird.vel, bird.ang_vel] for bird in physics.sky.birds])
 
         elapsed = time.time() - start_t
         print("Simulation ended at t=%s, elapsed: %dh %dm %ds. N=%d, L=%d, eta=%.2f, v=%.1f, omega=%.1f, T=%d, dt=%.1f" % (
             datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
             elapsed // 3600 % 24, elapsed // 60 % 60, elapsed % 60,
-            len(self.physics.sky.birds), self.physics.sky.L, self.physics.eta, self.physics.sky.birds[0].vel, self.physics.sky.birds[0].ang_vel, self.total_time,
-            self.dt))
+            len(physics.sky.birds), physics.sky.L, physics.eta, physics.sky.birds[0].vel, physics.sky.birds[0].ang_vel, total_time,
+            dt))
 
-        data_to_save = {"frames": frames, "parameters": [self.dt, self.total_time, self.physics.sky.L, self.physics.eta, self.physics.interaction_radius]}
+        data_to_save = {"frames": frames, "parameters": [dt, total_time, physics.sky.L, physics.eta, physics.interaction_radius]}
         with open(output_file, "w") as f:
             json.dump(data_to_save, f, cls=NumpyEncoder)
 
@@ -295,6 +294,7 @@ class Life:
         # text and time
         time_text = ax_quiver.text(0.02, 1.05, '', transform=ax_quiver.transAxes)
         correlations_text = ax_correlation.text(0.02, 1.05, '', transform=ax_correlation.transAxes)
+        groups_text = ax_groups.text(0.02, 1.05, '', transform=ax_groups.transAxes)
         timestamps = np.arange(0, total_time, dt)
         total_frames = len(timestamps)
 
@@ -310,9 +310,9 @@ class Life:
         max_group_size = options.get("max_group_size", 20)
         max_num_groups = options.get("max_num_groups", 20)
         ax_groups.set_xlim(1, max_group_size)
-        ax_groups.set_ylim(0, max_num_groups)
-        ax_groups.set_xscale("symlog")
-        ax_groups.set_yscale("symlog")
+        ax_groups.set_ylim(.1, max_num_groups)
+        ax_groups.set_xscale("log")
+        ax_groups.set_yscale("log")
         if draw_groups:
             groups_line, = ax_groups.plot([], [], marker="o", lw=2)
             ax_groups.set_xlabel("group size")
@@ -320,8 +320,8 @@ class Life:
 
         if draw_avg_groups:
             avg_groups_line, = ax_groups.plot([], [], marker="o", lw=2, label="average")
-            avg_groups = np.array([0 for i in range(max_group_size+1)])
-
+            avg_groups_fit, = ax_groups.plot([], [], lw=2, label="fit")
+            avg_groups = np.array([1]+[.1 for _ in range(max_group_size)])
 
         # avg_speed
         ax_speed.set_xlim(0, total_time)
@@ -354,7 +354,7 @@ class Life:
             ax_correlation.set_ylabel("correlation (normed)")
 
         # avg_polar
-        if draw_avg_groups:
+        if draw_avg_polar:
             ax_polar.set_title("Avg. angle and speed")
             avg_polar, = ax_polar.plot([], [], lw=2)
             avg_polar_end, = ax_polar.plot([], [], lw=2, marker="o", markersize=6, color="red")
@@ -382,7 +382,7 @@ class Life:
 
             if draw_groups:
                 sky.gridstep = interaction_radius/2
-                sky.gridL = int(np.ceil(L / gridstep))
+                sky.gridL = int(np.ceil(L / sky.gridstep))
                 physics = Physics(sky, interaction_radius, eta)
 
             positions = np.array([bird.pos for bird in sky.birds])
@@ -391,6 +391,7 @@ class Life:
 
             if draw_groups or draw_avg_groups:
                 groups, bird_to_group = physics.get_groups()
+                np.random.seed(11121997)
                 group_colors = np.random.rand(len(groups))
                 quiver_colors = []
                 for bird in sky.birds:
@@ -407,8 +408,26 @@ class Life:
                     for i in range(len(avg_groups)):
                         avg_groups[i] += size_groups.count(i)
                     size_x = np.array(range(1, len(avg_groups)))
-                    avg_groups_line.set_data(size_x, avg_groups[1:] / avg_groups[0])
+                    size_y = avg_groups[1:] / avg_groups[0]
+                    avg_groups_line.set_data(size_x, size_y)
                     artists.append(avg_groups_line)
+
+                    # linear fit:
+                    try:
+                        fit = lambda x,a,b: b*x**a
+                        popt, _ = scipy.optimize.curve_fit(fit, size_x, size_y)
+                        a, b = popt
+                        avg_groups_fit.set_data(size_x, fit(size_x, a, b))
+                        artists.append(avg_groups_fit)
+
+                        residuals = size_y - fit(size_x, a, b)
+                        ss_res = np.sum(residuals ** 2)
+                        ss_tot = np.sum((size_y - np.mean(size_y)) ** 2)
+                        r_squared = 1 - (ss_res / ss_tot)
+                        groups_text.set_text("$R^2$ = %.5f\n $bx^a$: a=%.2f, b=%.2f" % (r_squared, a, b))
+                        artists.append(groups_text)
+                    except Exception as e:
+                        print("Exception in fit: %s" % e)
 
 
             if draw_quiver:
@@ -512,32 +531,24 @@ class Life:
             "Drawing ended at t=%s, elapsed: %dh %dm %ds. N=%d, L=%d, eta=%.2f, v=%.1f, omega=%.1f, T=%d, dt=%.1f" % (
             datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
             elapsed // 3600 % 24, elapsed // 60 % 60, elapsed % 60,
-            len(sky.birds), L, eta, sky.birds[0].vel, sky.birds[0].ang_vel, total_time, dt))
+            len(frames[0]), L, eta, frames[0][0][2], frames[0][0][3], total_time, dt))
 
 
-L = 70
-gridstep = .5
-n_birds = 500
-vel = 1
-ang_vel = np.pi/2
-interaction_radius = 1
-eta = .5
+def launch_simulation(output_file: str, L: float, n_birds: int, vel: float=1, ang_vel: float=np.pi/2, interaction_radius: float=1,
+                      eta: float=.5, dt: float=1, total_time: float=100):
+    gridstep = interaction_radius / 2
+    sky = Sky(L, gridstep)
+    sky.add_n_random_birds(n_birds, vel, ang_vel)
+    physics = Physics(sky, interaction_radius, eta)
+    life = Life()
 
-dt = 1
-total_time = 200
-
-sky = Sky(L, gridstep)
-sky.add_n_random_birds(n_birds, vel, ang_vel)
-physics = Physics(sky, interaction_radius, eta)
-life = Life(physics, dt, total_time)
-
-# life.simulate(verbose_prop=.1)
-life.animate(verbose_prop=.05, to_draw=["quiver", "avg_speed", "avg_angle", "correlations", "correlations_fit", "groups", "avg_groups", "avg_polar"], options={"fit_spatial_points": 100,
-                                                                                                                          "correlations_stochastic_points": 5000,
-                                                                                                                          "max_num_groups": n_birds/5})
+    life.simulate(physics, dt, total_time, verbose_prop=.1, output_file=output_file)
 
 
+launch_simulation("test.json", 10, 10)
 
+#Life().animate(input_file="test.json", verbose_prop=.001, to_draw=["quiver", "avg_speed", "avg_angle", "avg_polar", "groups", "avg_groups"], options={"fit_spatial_points": 100,
+#                                                                                                                     "max_num_groups": 100/5})
 
 
 
