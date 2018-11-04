@@ -7,6 +7,7 @@ import cmocean
 import matplotlib.animation as animation
 import matplotlib.colors
 import numpy as np
+import scipy.spatial
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
@@ -97,6 +98,8 @@ class Visualiser:
             self.options["animation"] = True
         if "quiver_color_by_group" not in self.options:
             self.options["quiver_color_by_group"] = False
+        if "quiver_draw_by_group" not in self.options:
+            self.options["quiver_draw_by_group"] = False
         self.group_colors = np.random.rand(100)
 
         self.processed_data = dict()
@@ -134,7 +137,7 @@ class Visualiser:
             required_data = drawable_to_data[drawable]
             for data in required_data:
                 data_to_fetch.add(data)
-        if self.options["quiver_color_by_group"]:
+        if self.options["quiver_color_by_group"] or self.options["quiver_draw_by_group"]:
             data_to_fetch.add("groups")
 
         # load data
@@ -343,18 +346,57 @@ class Visualiser:
         else:
             quiver_colors = self.norm(angles)
 
-        x, y = positions[:, 0], positions[:, 1]
-        n = len(frame)
-        new_offsets = np.zeros((n, 2))
-        for i in range(n):
-            new_offsets[i][0] = x[i]
-            new_offsets[i][1] = y[i]
-        u = np.cos(angles)
-        v = np.sin(angles)
-        quiver = self.subplots["quiver"].quiver(x, y, u, v, quiver_colors, cmap=self.cm, angles='xy', scale_units='xy',
-                                                scale=1)
-        self.layout_artists["quiver"] = quiver
-        self.to_unblit.append(quiver)
+        if self.options["quiver_draw_by_group"]:
+            L = self.simulation_parameters["L"]
+            groups = self.processed_data["groups"][frame_num]
+            indexes_of_bird_by_group = [[i for i in range(len(groups)) if groups[i]==j] for j in range(len(groups))]
+            for group in range(len(groups)):
+                birds_indexes = indexes_of_bird_by_group[group]
+                if len(birds_indexes) == 0:
+                    continue
+                elif len(birds_indexes) == 1:
+                    pos = positions[birds_indexes[0]]
+                    hull_plot_points, = self.subplots["quiver"].plot([pos[0]], [pos[1]], 'ro', markersize=3, color="blue")
+                    self.to_unblit.append(hull_plot_points)
+                    self.layout_artists["quiver_hull_%s_points" % group] = hull_plot_points
+                    continue
+
+                positions_hull = positions[birds_indexes]
+                angles_hull = angles[birds_indexes]
+                if len(birds_indexes) == 2:
+                    hull = list(range(len(birds_indexes)))
+                else:
+                    hull = scipy.spatial.ConvexHull(positions_hull).vertices
+                x = list(positions_hull[hull, 0])+[positions_hull[hull[0], 0]]
+                y = list(positions_hull[hull, 1])+[positions_hull[hull[0], 1]]
+                angles_hull = list(angles_hull[hull]) + [angles_hull[hull[0]]]
+                for point in range(len(list(x))-1):
+                    distance_x = abs(x[point + 1] - x[point])
+                    distance_y = abs(y[point + 1] - y[point])
+                    if self.options["quiver_color_by_group"]:
+                        color = self.cm(self.group_colors[group % len(self.group_colors)])
+                    else:
+                        color = self.cm(self.norm((angles_hull[point]+angles_hull[point+1])/2))
+                    if not (distance_x > L/2 or distance_y > L/2):
+                        hull_plot_segment, = self.subplots["quiver"].plot([x[point], x[point+1]], [y[point], y[point+1]], linewidth=2, color=color)
+                        self.to_unblit.append(hull_plot_segment)
+                        self.layout_artists["quiver_hull_%s_%s" % (group, point)] = hull_plot_segment
+                        # hull_plot_points, = self.subplots["quiver"].plot([x[point], x[point+1]], [y[point], y[point+1]], 'ro', markersize=3, color="blue")
+                        # self.to_unblit.append(hull_plot_points)
+                        # self.layout_artists["quiver_hull_%s_%s_points" % (group, point)] = hull_plot_points
+        else:
+            x, y = positions[:, 0], positions[:, 1]
+            n = len(frame)
+            new_offsets = np.zeros((n, 2))
+            for i in range(n):
+                new_offsets[i][0] = x[i]
+                new_offsets[i][1] = y[i]
+            u = np.cos(angles)
+            v = np.sin(angles)
+            quiver = self.subplots["quiver"].quiver(x, y, u, v, quiver_colors, cmap=self.cm, angles='xy', scale_units='xy',
+                                                    scale=1)
+            self.layout_artists["quiver"] = quiver
+            self.to_unblit.append(quiver)
         self.layout_artists["time_text"].set_text("t=%.1f, N=%d" % (self.timestamps[frame_num], len(positions)))
 
     def vizualize(self) -> None:

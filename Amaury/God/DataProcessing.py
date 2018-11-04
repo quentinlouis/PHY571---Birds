@@ -213,9 +213,6 @@ class Processor:
         interaction_radius = self.simulation_params["interaction_radius"]
 
         # recreate environment
-        if not (self.to_process[
-            "group_size"]):  # no need to process interactions > big grid for faster perfs and less memory usage
-            interaction_radius = 2 * L
         sky = SaveAndLoad.recreate_frame(frame, L, interaction_radius / 2)
         physics = Physics(sky, interaction_radius, eta)
 
