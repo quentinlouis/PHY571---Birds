@@ -22,18 +22,18 @@ def evolve(sky: Sky):
     pass  # sky.add_n_random_birds(3, 1, np.pi/2)
 
 
-#launch_simulation("simulation_data/test.json", L=100, n_birds=200, total_time=200, evolve=evolve)
+launch_simulation("simulation_data/test.json", L=100, n_birds=10000, total_time=1000, evolve=evolve)
 
 to_process = ["avg_speed", "avg_angle", "group_size", "group_size_avg", "group_size_avg_fit", "groups", "correlations",
               "correlations_fit"]
-#Processor().process("simulation_data/test.json", "processing_data/test", verbose_prop=.1, to_process=to_process)
+Processor().process("simulation_data/test.json", "processing_data/test", verbose_prop=.1, to_process=to_process, options={"correlations_stochastic_points": 5000})
 
 to_draw = ["avg_speed", "avg_angle", "avg_polar", "correlations", "correlations_fit", "correlation_length",
            "group_size", "group_size_avg", "group_size_avg_fit", "quiver"]
 
 Visualiser("processing_data/test", "visualisations/test.mp4", simulation_data_file="simulation_data/test.json",
            verbose_prop=.1,
-           to_draw=to_draw, options={"quiver_color_by_group": False, "quiver_draw_by_group": False, "max_group_size": 40, "max_num_groups": 40}).vizualize()
+           to_draw=to_draw, options={"quiver_color_by_group": False, "quiver_draw_by_group": False, "max_group_size": 5000, "max_num_groups": 500}).vizualize()
 
 # N = [10000]
 #

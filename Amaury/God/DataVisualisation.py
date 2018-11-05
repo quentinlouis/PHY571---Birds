@@ -336,7 +336,7 @@ class Visualiser:
 
     def plot_group_size_avg_fit(self, frame_num: int) -> None:
         def fit(x, a1, b1):
-            return b1 * x ** a1
+            return np.exp(b1) * x**a1
 
         data = self.processed_data["group_size_avg_fit"][frame_num]
         if data is None:
@@ -345,7 +345,7 @@ class Visualiser:
         max_group_size = self.options["max_group_size"]
         x_data = np.array(range(1, max_group_size + 1))
         self.layout_artists["group_size_avg_fit"].set_data(x_data, fit(x_data, a, b))
-        self.layout_artists["groups_text"].set_text("$R^2$ = %.5f\n $bx^a$: a=%.2f, b=%.2f" % (r_squared, a, b))
+        self.layout_artists["groups_text"].set_text("$R^2$ = %.5f\n $ax+b$: a=%.2f, b=%.2f" % (r_squared, a, b))
 
     def plot_quiver(self, frame_num: int) -> None:
         frame = self.processed_data["_simulation"]["frames"][frame_num]
