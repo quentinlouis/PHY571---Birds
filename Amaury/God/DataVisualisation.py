@@ -186,7 +186,7 @@ class Visualiser:
             self.layout_artists["groups_text"] = self.subplots["groups"].text(
                 0.02, 1.05, '', transform=self.subplots["groups"].transAxes)
             if self.to_draw["group_size"]:
-                self.layout_artists["group_size"], = ax_groups.plot([], [], marker="o", lw=2)
+                self.layout_artists["group_size"], = ax_groups.plot([], [], linestyle="None", marker="o", lw=2)
                 ax_groups.set_xlabel("group size")
                 ax_groups.set_ylabel("# of groups")
             if self.to_draw["group_size_avg"]:
