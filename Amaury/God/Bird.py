@@ -11,6 +11,9 @@ class Bird:
         self.speedV = None
         self.update_calculated_props()
 
+    def clone(self):
+        return Bird(self.pos, self.vel, self.ang_vel, self.angle)
+
     def __repr__(self):
         return "Bird(%.2f, %.2f)" % (self.pos[0], self.pos[1])
 

@@ -23,7 +23,7 @@ def get_layout(option: str = "default") -> Tuple[Any, dict, dict]:
     fig = plt.figure()
     layout_artists = {}
 
-    if option == "default":
+    if option == "default_old":
         gs = GridSpec(2, 4)
         subplots["quiver"] = fig.add_subplot(gs[0:2, 0:2])
         subplots["speed"] = fig.add_subplot(gs[0, 2])
@@ -32,6 +32,19 @@ def get_layout(option: str = "default") -> Tuple[Any, dict, dict]:
         subplots["correlations"] = fig.add_subplot(gs[1, 2])
         subplots["correlation_length"] = subplots["correlations"].twinx()
         subplots["groups"] = fig.add_subplot(gs[1, 3])
+        fig.set_size_inches(18, 10, True)
+
+        # text and time
+        layout_artists["time_text"] = subplots["quiver"].text(0.02, 1.05, '', transform=subplots["quiver"].transAxes)
+    elif option == "default":
+        gs = GridSpec(3, 6)
+        subplots["quiver"] = fig.add_subplot(gs[0:3, 0:3])
+        subplots["speed"] = fig.add_subplot(gs[0, 3])
+        subplots["angle"] = subplots["speed"].twinx()
+        subplots["polar"] = fig.add_subplot(gs[0, 4], projection='polar')
+        subplots["correlations"] = fig.add_subplot(gs[1, 3])
+        subplots["correlation_length"] = subplots["correlations"].twinx()
+        subplots["groups"] = fig.add_subplot(gs[2, 3])
         fig.set_size_inches(18, 10, True)
 
         # text and time
