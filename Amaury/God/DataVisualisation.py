@@ -113,6 +113,8 @@ class Visualiser:
             self.options["quiver_color_by_group"] = False
         if "quiver_draw_by_group" not in self.options:
             self.options["quiver_draw_by_group"] = False
+        if "groups_num_ymin" not in self.options:
+            self.options["groups_num_ymin"] = .01
         self.group_colors = np.random.rand(100)
 
         self.processed_data = dict()
@@ -176,8 +178,9 @@ class Visualiser:
             ax_groups = self.subplots["groups"]
             max_group_size = self.options["max_group_size"]
             max_num_groups = self.options["max_num_groups"]
+            groups_num_ymin = self.options["groups_num_ymin"]
             ax_groups.set_xlim(1, max_group_size)
-            ax_groups.set_ylim(.1, max_num_groups)
+            ax_groups.set_ylim(groups_num_ymin, max_num_groups)
             ax_groups.set_xscale("log")
             ax_groups.set_yscale("log")
             self.layout_artists["groups_text"] = self.subplots["groups"].text(
