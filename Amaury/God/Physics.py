@@ -82,7 +82,9 @@ class Physics:
         grid_ymax = int(np.ceil(gridpos[1] + grid_interaction_radius))
 
         for i, j in itertools.product(range(grid_xmin, grid_xmax + 1), range(grid_ymin, grid_ymax + 1)):
-            interact_with += self.sky.grid[i % self.sky.gridL, j % self.sky.gridL]
+            other_birds = self.sky.grid[i % self.sky.gridL, j % self.sky.gridL]
+            if other_birds is not None:
+                interact_with += other_birds
 
         return interact_with
 
@@ -99,9 +101,13 @@ class Physics:
 
     def advance(self, dt: float) -> None:
         self.sky.update_grid()
-        for bird in self.sky.birds:
+        birds_after_update = [bird.clone() for bird in self.sky.birds]
+
+        for bird_i in range(len(self.sky.birds)):
+            bird_old = self.sky.birds[bird_i]
+            bird_new = birds_after_update[bird_i]
             # Collect all bird in interaction range
-            interact_with_close = self.get_interact_with_radius(bird)
+            interact_with_close = self.get_interact_with_radius(bird_old)
 
             # Apply interaction
             median_cos = 0
@@ -110,12 +116,13 @@ class Physics:
                 median_cos += np.cos(other_bird.angle)
                 median_sin += np.sin(other_bird.angle)
             median_angle = np.arctan2(median_sin, median_cos)
-            diff = short_angle_dist(bird.angle, median_angle)
-            t_move = abs(diff) / bird.ang_vel
+            diff = short_angle_dist(bird_new.angle, median_angle)
+            t_move = abs(diff) / bird_new.ang_vel
             t_move = min(dt, t_move)
 
-            fluctuation_angle = bird.ang_vel * self.eta * (np.random.rand() - .5) * dt
-            bird.angle = (bird.angle + np.sign(diff) * bird.ang_vel * t_move + fluctuation_angle) % (2 * np.pi)
+            fluctuation_angle = bird_new.ang_vel * self.eta * (np.random.rand() - .5) * dt
+            bird_new.angle = (bird_new.angle + np.sign(diff) * bird_new.ang_vel * t_move + fluctuation_angle) % (2 * np.pi)
+        self.sky.birds = birds_after_update
 
         # Verlet movement *after* updating directions
         for bird in self.sky.birds:

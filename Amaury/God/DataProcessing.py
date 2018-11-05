@@ -82,8 +82,10 @@ class Processor:
         self.options = {} if options is None else options
         if "correlations_stochastic_points" not in self.options:
             self.options["correlations_stochastic_points"] = 2000
-        if "fit_spatial_points" not in self.options:
+        if "correlations_fit_spatial_points" not in self.options:
             self.options["fit_spatial_points"] = 100
+        if "group_fit_max_size" not in self.options:
+            self.options["group_fit_max_size"] = 50
 
         # load data
         self.load_data(input_file)
@@ -147,12 +149,15 @@ class Processor:
 
     def process_group_size_avg_fit(self) -> None:
         def fit(x, a1, b1):
-            return b1 * x ** a1
+            return a1 * x + b1
 
-        group_size_avg = self.data_holders["group_size_avg"][-1]
+        group_size_avg = self.data_holders["group_size_avg"][-1][:self.options["group_fit_max_size"]]
         size_x = np.array(range(1, len(group_size_avg) + 1))
 
         try:
+            nonzero_indexes = [i for i in range(len(group_size_avg)) if group_size_avg[i] > 0]
+            size_x = np.log(size_x[nonzero_indexes])
+            group_size_avg = np.log(group_size_avg[nonzero_indexes])
             popt, _ = scipy.optimize.curve_fit(fit, size_x, group_size_avg)
             a, b = popt
 
@@ -213,11 +218,11 @@ class Processor:
         interaction_radius = self.simulation_params["interaction_radius"]
 
         # recreate environment
-        if not (self.to_process[
-            "group_size"]):  # no need to process interactions > big grid for faster perfs and less memory usage
-            interaction_radius = 2 * L
-        sky = SaveAndLoad.recreate_frame(frame, L, interaction_radius / 2)
-        physics = Physics(sky, interaction_radius, eta)
+        if self.to_process["groups"] or self.to_process["group_size"] or self.to_process["group_size_avg"]:
+            sky = SaveAndLoad.recreate_frame(frame, L, interaction_radius)
+            physics = Physics(sky, interaction_radius, eta)
+        else:
+            sky = SaveAndLoad.recreate_frame(frame, L, L)
 
         if self.to_process["avg_speed"]:
             self.process_avg_speed(sky)

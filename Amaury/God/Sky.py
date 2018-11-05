@@ -1,5 +1,4 @@
 import numpy as np
-import itertools
 from typing import List
 
 from God.Bird import Bird
@@ -65,15 +64,16 @@ class Sky:
         self.birds.append(bird)
 
     def init_grid(self) -> None:
-        self.grid = np.zeros((self.gridL, self.gridL), dtype=object)
-        for i, j in itertools.product(range(self.gridL), range(self.gridL)):
-            self.grid[i, j] = []
+        self.grid = np.empty((self.gridL, self.gridL), dtype=object)
 
     def update_grid(self) -> None:
         self.init_grid()
         for bird in self.birds:
             gridpos = bird.pos // self.gridstep
-            self.grid[int(gridpos[0]), int(gridpos[1])].append(bird)
+            i, j = int(gridpos[0]), int(gridpos[1])
+            if self.grid[i, j] is None:
+                self.grid[i, j] = []
+            self.grid[i, j].append(bird)
 
     def add_n_random_birds(self, n: int, vel: float, ang_vel: float) -> None:
         for _ in range(n):
