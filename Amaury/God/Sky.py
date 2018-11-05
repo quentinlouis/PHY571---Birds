@@ -23,10 +23,7 @@ class Sky:
         return np.sqrt(min(diff[0], self.L - diff[0]) ** 2 + min(diff[1], self.L - diff[1]) ** 2)
 
     def get_avg_speed(self) -> float:
-        angles = np.array([bird.angle for bird in self.birds])
-        velocities = np.array([bird.vel for bird in self.birds])
-        vel_x_mean, vel_y_mean = np.mean(np.cos(angles)*velocities), np.mean(np.sin(angles)*velocities)
-        return np.linalg.norm(np.array([vel_x_mean, vel_y_mean]))
+        return np.linalg.norm(np.mean([bird.speedV for bird in self.birds], axis=0))
 
     def get_avg_angle(self) -> float:
         median_cos = 0
