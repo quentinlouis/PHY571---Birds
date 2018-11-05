@@ -213,8 +213,11 @@ class Processor:
         interaction_radius = self.simulation_params["interaction_radius"]
 
         # recreate environment
-        sky = SaveAndLoad.recreate_frame(frame, L, interaction_radius / 2)
-        physics = Physics(sky, interaction_radius, eta)
+        if self.to_process["groups"] or self.to_process["group_size"] or self.to_process["group_size_avg"]:
+            sky = SaveAndLoad.recreate_frame(frame, L, interaction_radius)
+            physics = Physics(sky, interaction_radius, eta)
+        else:
+            sky = SaveAndLoad.recreate_frame(frame, L, L)
 
         if self.to_process["avg_speed"]:
             self.process_avg_speed(sky)

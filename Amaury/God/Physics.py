@@ -82,7 +82,9 @@ class Physics:
         grid_ymax = int(np.ceil(gridpos[1] + grid_interaction_radius))
 
         for i, j in itertools.product(range(grid_xmin, grid_xmax + 1), range(grid_ymin, grid_ymax + 1)):
-            interact_with += self.sky.grid[i % self.sky.gridL, j % self.sky.gridL]
+            other_birds = self.sky.grid[i % self.sky.gridL, j % self.sky.gridL]
+            if other_birds is not None:
+                interact_with += other_birds
 
         return interact_with
 

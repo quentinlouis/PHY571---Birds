@@ -377,7 +377,7 @@ class Visualiser:
                         color = self.cm(self.group_colors[group % len(self.group_colors)])
                     else:
                         color = self.cm(self.norm((angles_hull[point]+angles_hull[point+1])/2))
-                    if not (distance_x > L/2 or distance_y > L/2):
+                    if distance_x < L/2 and distance_y < L/2:
                         hull_plot_segment, = self.subplots["quiver"].plot([x[point], x[point+1]], [y[point], y[point+1]], linewidth=2, color=color)
                         self.to_unblit.append(hull_plot_segment)
                         self.layout_artists["quiver_hull_%s_%s" % (group, point)] = hull_plot_segment
@@ -393,7 +393,7 @@ class Visualiser:
                 new_offsets[i][1] = y[i]
             u = np.cos(angles)
             v = np.sin(angles)
-            quiver = self.subplots["quiver"].quiver(x, y, u, v, quiver_colors, cmap=self.cm, angles='xy', scale_units='xy',
+            quiver = self.subplots["quiver"].quiver(x, y, u, v, color=self.cm(quiver_colors), angles='xy', scale_units='xy',
                                                     scale=1)
             self.layout_artists["quiver"] = quiver
             self.to_unblit.append(quiver)
