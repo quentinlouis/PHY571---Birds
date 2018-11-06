@@ -115,6 +115,9 @@ class Visualiser:
             self.options["quiver_draw_by_group"] = False
         if "groups_num_ymin" not in self.options:
             self.options["groups_num_ymin"] = .01
+        if "vel_scaling" not in self.options:
+            self.options["vel_scaling"] = 1
+
         self.group_colors = np.random.rand(100)
 
         self.processed_data = dict()
@@ -194,9 +197,10 @@ class Visualiser:
                 self.layout_artists["group_size_avg_fit"], = ax_groups.plot([], [], lw=2, label="fit")
 
         if self.to_draw["avg_speed"]:
+            vel_scaling = self.options["vel_scaling"]
             ax_speed = self.subplots["speed"]
             ax_speed.set_xlim(self.t_start, self.t_end)
-            ax_speed.set_ylim(0, 1)
+            ax_speed.set_ylim(0, vel_scaling)
             self.layout_artists["avg_speed"], = ax_speed.plot([], [], lw=2, label="speed")
             ax_speed.set_xlabel("time (s)")
             ax_speed.set_ylabel("avg. speed (m/s)")
@@ -228,12 +232,13 @@ class Visualiser:
             ax_correlation.set_ylabel("correlation (normed)")
 
         if self.to_draw["avg_polar"]:
+            vel_scaling = self.options["vel_scaling"]
             ax_polar = self.subplots["polar"]
             ax_polar.set_title("Avg. angle and speed")
             self.layout_artists["avg_polar"], = ax_polar.plot([], [], lw=2)
             self.layout_artists["avg_polar_endpoint"], = ax_polar.plot([], [], lw=2, marker="o", markersize=6,
                                                                        color="red")
-            ax_polar.set_rmax(1)
+            ax_polar.set_rmax(vel_scaling)
 
     def initialise_visualisation(self) -> None:
         # load data
