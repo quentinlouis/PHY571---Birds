@@ -77,3 +77,10 @@ class Sky:
             theta = np.random.rand() * np.pi * 2
             bird = Bird(np.random.rand(2) * self.L, vel, ang_vel, theta)
             self.add_bird(bird)
+
+    def vel_max(self) -> float:
+        vel_max = 0
+        for bird in self.birds:
+            if (vel_max < bird.vel):
+                vel_max = bird.vel
+        return vel_max
