@@ -1,4 +1,5 @@
 import json
+import ijson
 import os
 import pathlib
 from typing import List, Union
@@ -29,8 +30,9 @@ def load_data_dirname(input_dir: str, input_file: str) -> Union[list, dict]:
 
 
 def load_data(input_file: str) -> Union[list, dict]:
-    with open(input_file, "r") as f:
-        data = json.load(f)
+    with open(input_file, 'r') as f:
+        objects = ijson.items(f, 'meta.view.columns.item')
+        data = list(objects)
     return data
 
 
