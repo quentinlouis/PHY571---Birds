@@ -16,10 +16,11 @@ log.setLevel(logging.INFO)
 
 
 def get_group_size_occurences(groups: List[list]) -> Tuple[List[int], List[int]]:
-    size_groups = [len(group) for group in groups if len(group) > 0]
-    max_size_group = np.max(size_groups)
+    size_groups = [len(group) for group in groups ]
+    size_groups_curated = [i for i in size_groups if i > 0]
+    max_size_group = np.max(size_groups_curated)
     size_x = range(1, max_size_group + 1)
-    return size_groups, [size_groups.count(i) for i in size_x]
+    return size_groups, [size_groups_curated.count(i) for i in size_x]
 
 
 class Processor:
