@@ -45,6 +45,8 @@ def get_layout(option: str = "default") -> Tuple[Any, dict, dict]:
         subplots["correlations"] = fig.add_subplot(gs[1, 3])
         subplots["correlation_length"] = subplots["correlations"].twinx()
         subplots["groups"] = fig.add_subplot(gs[2, 3])
+        subplots["evolution_group_size"] = fig.add_subplot(gs[1, 4])
+
         fig.set_size_inches(18, 10, True)
 
         # text and time
@@ -244,6 +246,15 @@ class Visualiser:
                                                                        color="red")
             ax_polar.set_rmax(vel_scaling)
 
+        if self.to_draw["evolution_group_size"]:
+            ax_speed = self.subplots["evolution_group_size"]
+            ax_speed.set_xlim(self.t_start, self.t_end)
+            max_group_size = self.options["max_group_size"]
+            ax_speed.set_ylim(0, max_group_size)
+            self.layout_artists["evolution_group_size"], = ax_speed.plot([], [], lw=2, label="evolution_group_size")
+            ax_speed.set_xlabel("time (s)")
+            ax_speed.set_ylabel("group size")
+
     def initialise_visualisation(self) -> None:
         # load data
         self.load_data(self.simulation_data_file, self.processing_dir)
@@ -358,6 +369,12 @@ class Visualiser:
         x_data = np.array(range(1, max_group_size + 1))
         self.layout_artists["group_size_avg_fit"].set_data(x_data, fit(x_data, a, b))
         self.layout_artists["groups_text"].set_text("$R^2$ = %.5f\n $ax+b$: a=%.2f, b=%.2f" % (r_squared, a, b))
+
+    def plot_evolution_group_size(self, frame_num: int) -> None:
+        times = self.timestamps[:frame_num + 1]
+        ydata = self.layout_artists["evolution_group_size"].get_xdata()
+        group = self.processed_data["groups"][frame_num][0]
+        self.layout_artists["evolution_group_size"].set_data(times, ydata + [group])
 
     def plot_quiver(self, frame_num: int) -> None:
         frame = self.processed_data["_simulation"]["frames"][frame_num]
@@ -480,6 +497,9 @@ class Visualiser:
 
         if self.to_draw["quiver"]:
             self.plot_quiver(frame_number)
+
+        if self.to_draw["plot_evolution_group_size"]:
+            self.plot_evolution_group_size(frame_number)
 
         plt.tight_layout()
         return list(self.layout_artists.values())
