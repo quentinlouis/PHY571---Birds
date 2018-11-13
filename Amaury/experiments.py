@@ -42,7 +42,7 @@ launch_two_groups("simulation_data/test.json", L=100, n_birds_1=200, n_birds_2=1
                   total_time=100, center_1=[20, 50], center_2=[80, 50], angle_1=0, angle_2=np.pi)
 
 to_process = ["avg_speed", "avg_angle", "group_size", "group_size_avg", "group_size_avg_fit", "groups", "correlations",
-              "correlations_fit"]
+              "correlations_fit", "group_to_size"]
 Processor().process("simulation_data/test.json", "processing_data/test", verbose_prop=.1, to_process=to_process,
                     options={"correlations_stochastic_points": 5000})
 

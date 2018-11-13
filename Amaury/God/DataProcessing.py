@@ -1,7 +1,7 @@
 import datetime
 import logging
 import time
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import numpy as np
 import scipy.optimize
@@ -15,11 +15,11 @@ log.addHandler(logging.StreamHandler())
 log.setLevel(logging.INFO)
 
 
-def get_group_size_occurences(groups: List[list]) -> List[int]:
+def get_group_size_occurences(groups: List[list]) -> Tuple[List[int], List[int]]:
     size_groups = [len(group) for group in groups if len(group) > 0]
     max_size_group = np.max(size_groups)
     size_x = range(1, max_size_group + 1)
-    return [size_groups.count(i) for i in size_x]
+    return size_groups, [size_groups.count(i) for i in size_x]
 
 
 class Processor:
@@ -47,6 +47,7 @@ class Processor:
     def chose_what_to_process(self, to_process: List[str]) -> None:
         self.to_process["groups"] = "groups" in to_process
         self.to_process["group_size"] = "group_size" in to_process
+        self.to_process["group_to_size"] = "group_to_size" in to_process
         self.to_process["group_size_avg"] = "group_size_avg" in to_process
         self.to_process["group_size_avg_fit"] = self.to_process["group_size_avg"] and (
                 "group_size_avg_fit" in to_process)
@@ -65,6 +66,8 @@ class Processor:
             self.data_holders["avg_angle"] = []
         if self.to_process["groups"]:
             self.data_holders["groups"] = []
+        if self.to_process["group_to_size"]:
+            self.data_holders["group_to_size"] = []
         if self.to_process["group_size"]:
             self.data_holders["group_size"] = []
         if self.to_process["group_size_avg"]:
@@ -130,6 +133,9 @@ class Processor:
 
     def process_groups(self, sky: Sky, birds_to_group: dict):
         self.data_holders["groups"].append([birds_to_group[bird] for bird in sky.birds])
+
+    def process_group_to_size(self, group_to_size: List[int]) -> None:
+        self.data_holders["group_to_size"].append(group_to_size)
 
     def process_group_size(self, size_occurences: List[int]) -> None:
         self.data_holders["group_size"].append(size_occurences)
@@ -232,7 +238,9 @@ class Processor:
 
         if self.to_process["groups"] or self.to_process["group_size"] or self.to_process["group_size_avg"]:
             groups, bird_to_group = physics.get_groups()
-            size_occurences = get_group_size_occurences(groups)
+            group_to_size, size_occurences = get_group_size_occurences(groups)
+            if self.to_process["group_to_size"]:
+                self.process_group_to_size(group_to_size)
             if self.to_process["groups"]:
                 self.process_groups(sky, bird_to_group)
             if self.to_process["group_size"]:
@@ -252,7 +260,7 @@ class Processor:
             SaveAndLoad.save_data_dirname(self.data_holders[prop_name], output_file, "%s.json" % prop_name)
 
         # save the actual data
-        simple_propreties = ["avg_speed", "avg_angle", "groups", "group_size", "group_size_avg", "group_size_avg_fit",
+        simple_propreties = ["avg_speed", "avg_angle", "groups", "group_size", "group_to_size", "group_size_avg", "group_size_avg_fit",
                              "correlations", "correlations_fit"]
         for property_name in simple_propreties:
             if self.to_process[property_name]:

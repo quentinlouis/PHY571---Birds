@@ -68,7 +68,7 @@ drawable_to_data = {
     "group_size": ["group_size"],
     "group_size_avg": ["group_size_avg"],
     "group_size_avg_fit": ["group_size_avg_fit"],
-    "evolution_group_size": ["group_size", "groups"],
+    "evolution_group_size": ["group_to_size", "groups"],
 }
 
 
@@ -372,7 +372,7 @@ class Visualiser:
 
     def plot_evolution_group_size(self, frame_num: int) -> None:
         times = self.timestamps[:frame_num + 1]
-        ydata = [self.processed_data["group_size"][frame][(self.processed_data["groups"][frame][0])] for frame in range(frame_num)]
+        ydata = [self.processed_data["group_to_size"][frame][(self.processed_data["groups"][frame][0])] for frame in range(frame_num+1)]
         self.layout_artists["evolution_group_size"].set_data(times, ydata )
 
     def plot_quiver(self, frame_num: int) -> None:
