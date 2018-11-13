@@ -372,9 +372,8 @@ class Visualiser:
 
     def plot_evolution_group_size(self, frame_num: int) -> None:
         times = self.timestamps[:frame_num + 1]
-        ydata = self.layout_artists["evolution_group_size"].get_xdata()
-        group = self.processed_data["groups"][frame_num][0]
-        self.layout_artists["evolution_group_size"].set_data(times, ydata + [group])
+        ydata = [self.processed_data["group_size"][frame][(self.processed_data["groups"][frame][0])] for frame in range(frame_num)]
+        self.layout_artists["evolution_group_size"].set_data(times, ydata )
 
     def plot_quiver(self, frame_num: int) -> None:
         frame = self.processed_data["_simulation"]["frames"][frame_num]
