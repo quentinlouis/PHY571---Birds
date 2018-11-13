@@ -116,12 +116,14 @@ class Physics:
                 median_cos += np.cos(other_bird.angle)
                 median_sin += np.sin(other_bird.angle)
             median_angle = np.arctan2(median_sin, median_cos)
-            diff = short_angle_dist(bird_new.angle, median_angle)
+
+            fluctuation_angle = np.pi * 2 * self.eta * (np.random.rand() - .5) * dt
+
+            diff = short_angle_dist(bird_new.angle, median_angle + fluctuation_angle)
             t_move = abs(diff) / bird_new.ang_vel
             t_move = min(dt, t_move)
 
-            fluctuation_angle = bird_new.ang_vel * self.eta * (np.random.rand() - .5) * dt
-            bird_new.angle = (bird_new.angle + np.sign(diff) * bird_new.ang_vel * t_move + fluctuation_angle) % (2 * np.pi)
+            bird_new.angle = (bird_new.angle + np.sign(diff) * bird_new.ang_vel * t_move) % (2 * np.pi)
         self.sky.birds = birds_after_update
 
         # Verlet movement *after* updating directions
