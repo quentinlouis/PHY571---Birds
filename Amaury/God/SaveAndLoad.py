@@ -9,9 +9,9 @@ from God.Bird import Bird
 from God.Pandora import NumpyEncoder
 from God.Sky import Sky
 
-def read_in_chunks(file_object, chunk_size=1024):
+def read_in_chunks(file_object, chunk_size=1024*1000*100):
     """Lazy function (generator) to read a file piece by piece.
-    Default chunk size: 1k."""
+    Default chunk size: 100M."""
     while True:
         data = file_object.read(chunk_size)
         if not data:
