@@ -66,6 +66,7 @@ drawable_to_data = {
     "group_size": ["group_size"],
     "group_size_avg": ["group_size_avg"],
     "group_size_avg_fit": ["group_size_avg_fit"],
+    "evolution_group_size": ["group_size", "groups"],
 }
 
 
@@ -111,6 +112,8 @@ class Visualiser:
             self.options["animation"] = True
         if "quiver_color_by_group" not in self.options:
             self.options["quiver_color_by_group"] = False
+        if "quiver_color_single" not in self.options:
+            self.options["quiver_color_single"] = False
         if "quiver_draw_by_group" not in self.options:
             self.options["quiver_draw_by_group"] = False
         if "groups_num_ymin" not in self.options:
@@ -144,6 +147,7 @@ class Visualiser:
         self.to_draw["group_size"] = "group_size" in to_draw
         self.to_draw["group_size_avg"] = "group_size_avg" in to_draw
         self.to_draw["group_size_avg_fit"] = "group_size_avg_fit" in to_draw
+        self.to_draw["evolution_group_size"] = "evolution_group_size" in to_draw
 
         keys_to_draw = [k for k, v in self.to_draw.items() if v]
         log.info("The following properties will be drawn: %s" % keys_to_draw)
@@ -364,6 +368,9 @@ class Visualiser:
             quiver_colors = []
             for bird_group in groups:
                 quiver_colors.append(self.group_colors[bird_group % len(self.group_colors)])
+        elif self.options["quiver_color_single"]:
+            quiver_colors = np.zeros(positions.shape[0])
+            quiver_colors[0] = 1
         else:
             quiver_colors = self.norm(angles)
 

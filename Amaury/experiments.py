@@ -47,12 +47,12 @@ Processor().process("simulation_data/test.json", "processing_data/test", verbose
                     options={"correlations_stochastic_points": 5000})
 
 to_draw = ["avg_speed", "avg_angle", "avg_polar", "correlations", "correlations_fit", "correlation_length",
-           "group_size", "group_size_avg", "group_size_avg_fit", "quiver"]
+           "group_size", "group_size_avg", "group_size_avg_fit", "quiver", "evolution_group_size"]
 
 Visualiser("processing_data/test", "visualisations/test.mp4", simulation_data_file="simulation_data/test.json",
            verbose_prop=.1,
            to_draw=to_draw,
-           options={"quiver_color_by_group": False, "quiver_draw_by_group": False, "max_group_size": 5000,
+           options={"quiver_color_by_group": False, "quiver_draw_by_group": False, "quiver_color_single": True, "max_group_size": 5000,
                     "max_num_groups": 500}).vizualize()
 
 # N = [10000]

@@ -9,6 +9,7 @@ from God.Bird import Bird
 from God.Pandora import NumpyEncoder
 from God.Sky import Sky
 
+
 def read_in_chunks(file_object, chunk_size=1024*1000*100):
     """Lazy function (generator) to read a file piece by piece.
     Default chunk size: 100M."""
@@ -17,6 +18,7 @@ def read_in_chunks(file_object, chunk_size=1024*1000*100):
         if not data:
             break
         yield data
+
 
 def make_path_available(path: str) -> None:
     pathlib.Path(os.path.dirname(path)).mkdir(parents=True, exist_ok=True)
