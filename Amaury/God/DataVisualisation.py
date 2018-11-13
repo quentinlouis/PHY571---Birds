@@ -370,7 +370,8 @@ class Visualiser:
                 quiver_colors.append(self.group_colors[bird_group % len(self.group_colors)])
         elif self.options["quiver_color_single"]:
             quiver_colors = np.zeros(positions.shape[0])
-            quiver_colors[0] = 1
+            quiver_colors[0] = .7
+            self.cm = plt.get_cmap("Reds")
         else:
             quiver_colors = self.norm(angles)
 
