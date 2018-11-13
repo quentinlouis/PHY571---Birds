@@ -498,7 +498,7 @@ class Visualiser:
         if self.to_draw["quiver"]:
             self.plot_quiver(frame_number)
 
-        if self.to_draw["plot_evolution_group_size"]:
+        if self.to_draw["evolution_group_size"]:
             self.plot_evolution_group_size(frame_number)
 
         plt.tight_layout()
