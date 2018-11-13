@@ -99,7 +99,7 @@ class Physics:
 
         return interact_with_close
 
-    def advance(self, dt: float) -> None:
+    def advance2(self, dt: float) -> None:
         self.sky.update_grid()
         birds_after_update = [bird.clone() for bird in self.sky.birds]
 
@@ -124,6 +124,36 @@ class Physics:
             t_move = min(dt, t_move)
 
             bird_new.angle = (bird_new.angle + np.sign(diff) * bird_new.ang_vel * t_move) % (2 * np.pi)
+        self.sky.birds = birds_after_update
+
+        # Verlet movement *after* updating directions
+        for bird in self.sky.birds:
+            bird.update_calculated_props()
+            bird.pos = (bird.pos + bird.speedV * dt) % self.sky.L
+
+    def advance(self, dt: float) -> None:
+        self.sky.update_grid()
+        birds_after_update = [bird.clone() for bird in self.sky.birds]
+
+        for bird_i in range(len(self.sky.birds)):
+            bird_old = self.sky.birds[bird_i]
+            bird_new = birds_after_update[bird_i]
+            # Collect all bird in interaction range
+            interact_with_close = self.get_interact_with_radius(bird_old)
+
+            # Apply interaction
+            median_cos = 0
+            median_sin = 0
+            for other_bird in interact_with_close:
+                median_cos += np.cos(other_bird.angle)
+                median_sin += np.sin(other_bird.angle)
+            median_angle = np.arctan2(median_sin, median_cos)
+            diff = short_angle_dist(bird_new.angle, median_angle)
+            t_move = abs(diff) / bird_new.ang_vel
+            t_move = min(dt, t_move)
+
+            fluctuation_angle = bird_new.ang_vel * self.eta * (np.random.rand() - .5) * dt
+            bird_new.angle = (bird_new.angle + np.sign(diff) * bird_new.ang_vel * t_move + fluctuation_angle) % (2 * np.pi)
         self.sky.birds = birds_after_update
 
         # Verlet movement *after* updating directions
